@@ -3,9 +3,9 @@ use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 
 struct Triangle {
-    s1: u16,
-    s2: u16,
-    l: u16,
+    _s1: u16,
+    _s2: u16,
+    _l: u16,
 }
 
 impl Triangle {
@@ -17,9 +17,9 @@ impl Triangle {
             Err(())
         } else {
             Ok(Triangle {
-                s1: v[0],
-                s2: v[1],
-                l: v[2],
+                _s1: v[0],
+                _s2: v[1],
+                _l: v[2],
             })
         }
     }
