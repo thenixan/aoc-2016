@@ -26,9 +26,7 @@ impl FromStr for DoorId {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(DoorId {
-            value: s.to_string(),
-        })
+        Ok(DoorId::new(s))
     }
 }
 
