@@ -1,5 +1,6 @@
+use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::{BufReader, Bytes, Read};
+use std::io::{BufReader, Read};
 use std::ops::Deref;
 
 #[derive(Clone)]
@@ -83,11 +84,11 @@ trait Compressed {
     fn chunks(&self) -> Self::Into;
 }
 
-impl Chunk {
-    fn content(&self) -> &str {
+impl Display for Chunk {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Chunk::Plain(s) => s,
-            Chunk::Compressed(s, _) => s,
+            Chunk::Plain(s) => write!(f, "{}", s),
+            Chunk::Compressed(s, l) => write!(f, "({}x{}){}", s.len(), l, s),
         }
     }
 }
@@ -115,11 +116,11 @@ pub fn run() {
 
     let chunks = Data::from(input);
 
-    let result = chunks.iter().map(|c| c.content().len()).sum::<usize>();
+    let result = chunks.iter().map(|c| c.to_string().len()).sum::<usize>();
     println!("Result: {}", result);
 }
 
 pub fn run_e() {
     let input = File::open("input/task_9").unwrap();
-    let input = BufReader::new(input);
+    let _input = BufReader::new(input);
 }
