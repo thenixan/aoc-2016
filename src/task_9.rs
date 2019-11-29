@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::Read;
 use std::ops::Deref;
 
 #[derive(Clone, Debug)]
@@ -36,7 +36,6 @@ impl<A: Read> From<A> for Data<Chunk> {
         while let Some(b) = bytes.next() {
             if b == b'(' {
                 if counter.len() != 0 {
-                    println!("{}", counter);
                     chunks.push(Chunk::plain(&counter));
                     counter = String::new();
                 }
@@ -64,7 +63,6 @@ impl<A: Read> From<A> for Data<Chunk> {
             }
         }
         if counter.len() != 0 {
-            println!("{}", counter);
             chunks.push(Chunk::plain(&counter));
         }
         Data { chunks }
@@ -124,13 +122,88 @@ impl Compressed for Chunk {
     fn decompressable(&self) -> bool {
         self.is_compressed()
     }
-    fn decompress_top(&self) -> Vec<Self> {
+    fn decompress_top(&self) -> Self::Into {
         match self {
-            Chunk::Plain { content } => vec![self.clone()],
+            Chunk::Plain { content: _ } => vec![self.clone()],
             Chunk::Compressed { content, repeats } => std::iter::repeat(content.clone())
                 .take(*repeats)
                 .flatten()
                 .collect(),
+        }
+    }
+}
+
+trait Decompressable<A> {
+    fn decompress(&self) -> Decompressed<A>;
+}
+
+impl<A: Clone> Decompressable<Data<A>> for Data<A> {
+    fn decompress(&self) -> Decompressed<Self> {
+        Decompressed { content: self }
+    }
+}
+
+impl Decompressable<Chunk> for Chunk {
+    fn decompress(&self) -> Decompressed<Self> {
+        Decompressed { content: self }
+    }
+}
+
+struct Decompressed<'a, A> {
+    content: &'a A,
+}
+
+impl Decompressed<'_, Data<Chunk>> {
+    fn decompressed_len(&self) -> usize {
+        self.content
+            .iter()
+            .map(|c| c.decompress().decompressed_len())
+            .sum()
+    }
+}
+
+impl Decompressed<'_, Chunk> {
+    fn decompressed_len(&self) -> usize {
+        match self.content {
+            Chunk::Plain { content } => content.len(),
+            Chunk::Compressed { content, repeats } => {
+                content
+                    .iter()
+                    .map(|c| c.decompress().decompressed_len())
+                    .sum::<usize>()
+                    * repeats
+            }
+        }
+    }
+}
+
+impl<'a> Display for Decompressed<'a, Data<Chunk>> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut result = vec![];
+        for c in self.content.to_vec() {
+            result.push(c.decompress().to_string());
+        }
+        let result = result.into_iter().collect::<String>();
+        write!(f, "{}", result)
+    }
+}
+
+impl<'a> Display for Decompressed<'a, Chunk> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.content {
+            Chunk::Plain { content } => write!(f, "{}", content),
+            Chunk::Compressed { content, repeats } => {
+                let mut result = vec![];
+                for c in content {
+                    result.push(c.decompress().to_string())
+                }
+                let result = result.into_iter().collect::<String>();
+                write!(
+                    f,
+                    "{}",
+                    std::iter::repeat(result).take(*repeats).collect::<String>()
+                )
+            }
         }
     }
 }
@@ -140,15 +213,14 @@ pub fn run() {
 
     let chunks = Data::from(input).decompress_top();
 
-    for c in chunks.iter() {
-        println!("Chunks: {}", c);
-    }
-
     let result = chunks.iter().map(|c| c.to_string().len()).sum::<usize>();
     println!("Result: {}", result);
 }
 
 pub fn run_e() {
     let input = File::open("input/task_9").unwrap();
-    let _input = BufReader::new(input);
+
+    let result = Data::from(input).decompress().decompressed_len();
+
+    println!("Result: {}", result);
 }
