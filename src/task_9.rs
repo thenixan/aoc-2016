@@ -1,122 +1,71 @@
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{BufReader, Bytes, Read};
-use std::ops::Deref;
+use std::iter::{FromIterator, Take};
+use std::ops::DerefMut;
 
-#[derive(Clone)]
-struct Data<A: Clone> {
-    chunks: Vec<A>,
+struct Chunks {
+    content: Vec<CompressionChunk>,
 }
 
-impl<A: Clone> Deref for Data<A> {
-    type Target = Vec<A>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.chunks
-    }
+enum CompressionChunk {
+    Plain { content: String },
+    Compressed { body: Vec<Box<Self>>, times: usize },
 }
 
-impl Compressed for Data<Chunk> {
-    type Into = Self;
-    fn is_compressed(&self) -> bool {
-        self.iter().any(|c| c.is_compressed())
+impl CompressionChunk {
+    fn plain(s: &str) -> Self {
+        CompressionChunk::Plain {
+            content: s.to_string(),
+        }
     }
-
-    fn chunks(&self) -> Self::Into {
-        Data {
-            chunks: self.iter().map(|c| c.chunks()).flatten().collect(),
+    fn compressed(c: Vec<CompressionChunk>, times: usize) -> Self {
+        CompressionChunk::Compressed {
+            body: c.into_iter().map(|c| Box::new(c)).collect(),
+            times,
         }
     }
 }
 
-impl<A: Read> From<A> for Data<Chunk> {
-    fn from(read: A) -> Self {
-        let mut bytes = read.bytes().filter_map(|b| b.ok());
-        let mut counter = String::new();
-        let mut chunks = vec![];
-        while let Some(b) = bytes.next() {
-            if b == b'(' {
-                if counter.len() != 0 {
-                    println!("{}", counter);
-                    chunks.push(Chunk::Plain(counter));
-                    counter = String::new();
-                }
-                let mut c = String::new();
-                let mut buf = bytes.next().unwrap();
-                while buf != b'x' {
-                    c.push(buf as char);
-                    buf = bytes.next().unwrap();
-                }
-                let length = c.parse::<usize>().unwrap();
-                c = String::new();
-                buf = bytes.next().unwrap();
-                while buf != b')' {
-                    c.push(buf as char);
-                    buf = bytes.next().unwrap();
-                }
-                let times = c.parse::<usize>().unwrap();
-                c = String::new();
-                for _ in 0..length {
-                    c.push(bytes.next().unwrap() as char);
-                }
-                chunks.push(Chunk::Compressed(c, times));
-            } else {
-                counter.push(b as char);
+impl From<Vec<CompressionChunk>> for Chunks {
+    fn from(vec: Vec<CompressionChunk>) -> Self {
+        Chunks { content: vec }
+    }
+}
+
+impl FromIterator<char> for Chunks {
+    fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> Self {
+        let mut result = Vec::new();
+
+        let iterator = iter.into_iter();
+        let read = || {
+            let c = iterator.next();
+            match c {
+                Some('(') => (),
+                Some(o) => (),
+                None => None
             }
         }
-        if counter.len() != 0 {
-            println!("{}", counter);
-            chunks.push(Chunk::Plain(counter));
-        }
-        Data { chunks }
-    }
-}
-
-#[derive(Clone)]
-enum Chunk {
-    Plain(String),
-    Compressed(String, usize),
-}
-
-trait Compressed {
-    type Into;
-    fn is_compressed(&self) -> bool;
-    fn chunks(&self) -> Self::Into;
-}
-
-impl Chunk {
-    fn content(&self) -> &str {
-        match self {
-            Chunk::Plain(s) => s,
-            Chunk::Compressed(s, _) => s,
-        }
-    }
-}
-
-impl Compressed for Chunk {
-    type Into = Vec<Self>;
-    fn is_compressed(&self) -> bool {
-        match self {
-            Chunk::Plain(_) => false,
-            Chunk::Compressed(_, _) => true,
-        }
-    }
-
-    fn chunks(&self) -> Self::Into {
-        let c = match self {
-            Chunk::Plain(s) => s.clone(),
-            Chunk::Compressed(s, t) => std::iter::repeat(s.clone()).take(*t).collect::<String>(),
+        let read_plain_chunk = || {
+            
         };
-        Data::from(c.as_bytes()).to_vec()
+        let read_sized_chunk = || {
+
+        };
+        result.into()
     }
 }
 
 pub fn run() {
     let input = File::open("input/task_9").unwrap();
 
-    let chunks = Data::from(input);
+    let s = input
+        .bytes()
+        .filter_map(|b| b.ok())
+        .map(|b| b as char)
+        .collect::<Chunks>();
 
-    let result = chunks.iter().map(|c| c.content().len()).sum::<usize>();
-    println!("Result: {}", result);
+    println!("Result {}", s.content.len())
 }
 
 pub fn run_e() {
