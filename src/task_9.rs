@@ -18,13 +18,12 @@ impl<A: Clone> Deref for Data<A> {
 
 impl Compressed for Data<Chunk> {
     type Into = Self;
-    fn is_compressed(&self) -> bool {
+    fn decompressable(&self) -> bool {
         self.iter().any(|c| c.is_compressed())
     }
-
-    fn chunks(&self) -> Self::Into {
+    fn decompress_top(&self) -> Self::Into {
         Data {
-            chunks: self.iter().map(|c| c.chunks()).flatten().collect(),
+            chunks: self.iter().map(|c| c.decompress_top()).flatten().collect(),
         }
     }
 }
@@ -75,7 +74,7 @@ impl<A: Read> From<A> for Data<Chunk> {
 #[derive(Clone, Debug)]
 enum Chunk {
     Plain { content: String },
-    Compressed { repeats: usize, content: String },
+    Compressed { repeats: usize, content: Vec<Chunk> },
 }
 
 impl Chunk {
@@ -86,31 +85,11 @@ impl Chunk {
     }
     fn compressed(s: &str, l: usize) -> Self {
         Chunk::Compressed {
-            content: s.to_string(),
+            content: Data::from(s.as_bytes()).to_vec(),
             repeats: l,
         }
     }
-}
 
-trait Compressed {
-    type Into;
-    fn is_compressed(&self) -> bool;
-    fn chunks(&self) -> Self::Into;
-}
-
-impl Display for Chunk {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Chunk::Plain { content } => write!(f, "{}", content),
-            Chunk::Compressed { content, repeats } => {
-                write!(f, "({}x{}){}", content.len(), repeats, content)
-            }
-        }
-    }
-}
-
-impl Compressed for Chunk {
-    type Into = Vec<Self>;
     fn is_compressed(&self) -> bool {
         match self {
             Chunk::Plain { content: _ } => false,
@@ -120,24 +99,50 @@ impl Compressed for Chunk {
             } => true,
         }
     }
+}
 
-    fn chunks(&self) -> Self::Into {
-        let c = match self {
-            Chunk::Plain { content } => content.clone(),
+trait Compressed {
+    type Into;
+    fn decompressable(&self) -> bool;
+    fn decompress_top(&self) -> Self::Into;
+}
+
+impl Display for Chunk {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Chunk::Plain { content } => write!(f, "{}", content),
+            Chunk::Compressed { content, repeats } => {
+                let content: String = content.iter().map(|c: &Chunk| c.to_string()).collect();
+                write!(f, "({}x{}){}", content.len(), repeats, content)
+            }
+        }
+    }
+}
+
+impl Compressed for Chunk {
+    type Into = Vec<Self>;
+    fn decompressable(&self) -> bool {
+        self.is_compressed()
+    }
+    fn decompress_top(&self) -> Vec<Self> {
+        match self {
+            Chunk::Plain { content } => vec![self.clone()],
             Chunk::Compressed { content, repeats } => std::iter::repeat(content.clone())
                 .take(*repeats)
-                .collect::<String>(),
-        };
-        Data::from(c.as_bytes()).to_vec()
+                .flatten()
+                .collect(),
+        }
     }
 }
 
 pub fn run() {
     let input = File::open("input/task_9").unwrap();
 
-    let chunks = Data::from(input);
+    let chunks = Data::from(input).decompress_top();
 
-    println!("Chunks: {:?}", chunks);
+    for c in chunks.iter() {
+        println!("Chunks: {}", c);
+    }
 
     let result = chunks.iter().map(|c| c.to_string().len()).sum::<usize>();
     println!("Result: {}", result);
