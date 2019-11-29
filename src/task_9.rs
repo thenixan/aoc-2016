@@ -8,9 +8,12 @@ struct Data<A: Clone> {
     chunks: Vec<A>,
 }
 
-enum CompressionChunk {
-    Plain { content: String },
-    Compressed { body: Vec<Box<Self>>, times: usize },
+impl<A: Clone> Deref for Data<A> {
+    type Target = Vec<A>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.chunks
+    }
 }
 
 impl Compressed for Data<Chunk> {
