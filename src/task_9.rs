@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Data<A: Clone> {
     chunks: Vec<A>,
 }
@@ -38,7 +38,7 @@ impl<A: Read> From<A> for Data<Chunk> {
             if b == b'(' {
                 if counter.len() != 0 {
                     println!("{}", counter);
-                    chunks.push(Chunk::Plain(counter));
+                    chunks.push(Chunk::plain(&counter));
                     counter = String::new();
                 }
                 let mut c = String::new();
@@ -59,23 +59,37 @@ impl<A: Read> From<A> for Data<Chunk> {
                 for _ in 0..length {
                     c.push(bytes.next().unwrap() as char);
                 }
-                chunks.push(Chunk::Compressed(c, times));
+                chunks.push(Chunk::compressed(&c, times));
             } else {
                 counter.push(b as char);
             }
         }
         if counter.len() != 0 {
             println!("{}", counter);
-            chunks.push(Chunk::Plain(counter));
+            chunks.push(Chunk::plain(&counter));
         }
         Data { chunks }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Chunk {
-    Plain(String),
-    Compressed(String, usize),
+    Plain { content: String },
+    Compressed { repeats: usize, content: String },
+}
+
+impl Chunk {
+    fn plain(s: &str) -> Self {
+        Chunk::Plain {
+            content: s.to_string(),
+        }
+    }
+    fn compressed(s: &str, l: usize) -> Self {
+        Chunk::Compressed {
+            content: s.to_string(),
+            repeats: l,
+        }
+    }
 }
 
 trait Compressed {
@@ -87,8 +101,10 @@ trait Compressed {
 impl Display for Chunk {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Chunk::Plain(s) => write!(f, "{}", s),
-            Chunk::Compressed(s, l) => write!(f, "({}x{}){}", s.len(), l, s),
+            Chunk::Plain { content } => write!(f, "{}", content),
+            Chunk::Compressed { content, repeats } => {
+                write!(f, "({}x{}){}", content.len(), repeats, content)
+            }
         }
     }
 }
@@ -97,15 +113,20 @@ impl Compressed for Chunk {
     type Into = Vec<Self>;
     fn is_compressed(&self) -> bool {
         match self {
-            Chunk::Plain(_) => false,
-            Chunk::Compressed(_, _) => true,
+            Chunk::Plain { content: _ } => false,
+            Chunk::Compressed {
+                content: _,
+                repeats: _,
+            } => true,
         }
     }
 
     fn chunks(&self) -> Self::Into {
         let c = match self {
-            Chunk::Plain(s) => s.clone(),
-            Chunk::Compressed(s, t) => std::iter::repeat(s.clone()).take(*t).collect::<String>(),
+            Chunk::Plain { content } => content.clone(),
+            Chunk::Compressed { content, repeats } => std::iter::repeat(content.clone())
+                .take(*repeats)
+                .collect::<String>(),
         };
         Data::from(c.as_bytes()).to_vec()
     }
@@ -115,6 +136,8 @@ pub fn run() {
     let input = File::open("input/task_9").unwrap();
 
     let chunks = Data::from(input);
+
+    println!("Chunks: {:?}", chunks);
 
     let result = chunks.iter().map(|c| c.to_string().len()).sum::<usize>();
     println!("Result: {}", result);
