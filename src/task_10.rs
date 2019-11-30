@@ -106,7 +106,6 @@ impl Hash for Bot {
 #[derive(Debug)]
 struct Factory {
     inputs: Vec<Package>,
-    outputs: Vec<Output>,
     bots: Vec<Bot>,
 }
 
@@ -120,7 +119,6 @@ impl FromIterator<String> for Factory {
     fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> Self {
         let mut inputs = vec![];
         let mut bots = vec![];
-        let mut outputs = vec![];
 
         for l in iter {
             if l.starts_with("bot ") {
@@ -130,11 +128,7 @@ impl FromIterator<String> for Factory {
             }
         }
 
-        Factory {
-            inputs,
-            outputs,
-            bots,
-        }
+        Factory { inputs, bots }
     }
 }
 
@@ -142,6 +136,7 @@ struct FactoryIterator<'a> {
     inputs: std::vec::IntoIter<Package>,
     factory: &'a Factory,
     state: HashMap<usize, Vec<usize>>,
+    packages: Vec<(usize, Package)>,
 }
 
 impl<'a> FactoryIterator<'a> {
@@ -150,6 +145,7 @@ impl<'a> FactoryIterator<'a> {
             inputs: factory.inputs.clone().into_iter(),
             factory,
             state: HashMap::new(),
+            packages: Vec::new(),
         }
     }
 }
@@ -157,23 +153,47 @@ impl Iterator for FactoryIterator<'_> {
     type Item = FactoryHistoryRecord;
     fn next(&mut self) -> Option<Self::Item> {
         match self.inputs.next() {
-            None => {
-                let bot = self
-                    .state
-                    .iter()
-                    .find_map(|(k, v)| if v.len() == 2 { Some(k) } else { None })
-                    .take();
-                if bot.is_some() {
-                    let bot = bot.unwrap();
-                    let values = self.state.get_mut(bot).take();
-                    println!("Bot: {:?}", bot);
-                    None
-                } else {
-                    None
+            None => match self.packages.pop() {
+                Some((from, package)) => {
+                    match package.target {
+                        Target::ToBot(number) => self
+                            .state
+                            .entry(number)
+                            .or_insert(vec![])
+                            .push(package.value),
+                        Target::ToOutput(_) => {}
+                    };
+                    Some(FactoryHistoryRecord::Transmission {
+                        from_bot: from,
+                        package: package,
+                    })
                 }
-            }
+                None => {
+                    let bot = self
+                        .state
+                        .iter()
+                        .find_map(|(k, v)| if v.len() == 2 { Some(k) } else { None })
+                        .cloned();
+                    if bot.is_some() {
+                        let bot = bot.unwrap();
+                        let values = self.state.remove(&bot).unwrap();
+                        let bot = self.factory.bots.iter().find(|b| b.number == bot).unwrap();
+                        let min = values.iter().min().unwrap();
+                        let max = values.iter().max().unwrap();
+                        let min = Package::new(*min, bot.lower_to.clone());
+                        let max = Package::new(*max, bot.higher_to.clone());
+                        self.packages.push((bot.number, min));
+                        self.packages.push((bot.number, max));
+                        Some(FactoryHistoryRecord::Comparation {
+                            bot: bot.number,
+                            values: (values[0], values[1]),
+                        })
+                    } else {
+                        None
+                    }
+                }
+            },
             Some(p) => {
-                println!("Input: {:?}", p);
                 match p.target {
                     Target::ToBot(b) => self.state.entry(b).or_insert(vec![]).push(p.value),
                     Target::ToOutput(_) => (),
@@ -197,7 +217,15 @@ pub fn run() {
     let factory = input.lines().filter_map(|l| l.ok()).collect::<Factory>();
 
     let result = factory.work().find_map(|r| match r {
-        FactoryHistoryRecord::Comparation { bot, values } => Some("bot"),
+        FactoryHistoryRecord::Comparation { bot, values } => {
+            let min = usize::min(values.0, values.1);
+            let max = usize::max(values.0, values.1);
+            if min == 17 && max == 61 {
+                Some(bot)
+            } else {
+                None
+            }
+        }
         _ => None,
     });
 
