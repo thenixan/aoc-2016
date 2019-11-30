@@ -164,7 +164,7 @@ impl Iterator for FactoryIterator<'_> {
                         Target::ToOutput(_) => {}
                     };
                     Some(FactoryHistoryRecord::Transmission {
-                        from_bot: from,
+                        _from_bot: from,
                         package: package,
                     })
                 }
@@ -198,7 +198,7 @@ impl Iterator for FactoryIterator<'_> {
                     Target::ToBot(b) => self.state.entry(b).or_insert(vec![]).push(p.value),
                     Target::ToOutput(_) => (),
                 };
-                Some(FactoryHistoryRecord::Input { package: p })
+                Some(FactoryHistoryRecord::Input { _package: p })
             }
         }
     }
@@ -206,8 +206,8 @@ impl Iterator for FactoryIterator<'_> {
 
 enum FactoryHistoryRecord {
     Comparation { bot: usize, values: (usize, usize) },
-    Transmission { from_bot: usize, package: Package },
-    Input { package: Package },
+    Transmission { _from_bot: usize, package: Package },
+    Input { _package: Package },
 }
 
 pub fn run() {
@@ -233,5 +233,30 @@ pub fn run() {
 }
 
 pub fn run_e() {
-    let _input = File::open("input/task_9").unwrap();
+    let input = File::open("input/task_10").unwrap();
+    let input = BufReader::new(input);
+
+    let factory = input.lines().filter_map(|l| l.ok()).collect::<Factory>();
+
+    let result = factory
+        .work()
+        .filter_map(|r| match r {
+            FactoryHistoryRecord::Transmission {
+                _from_bot: _,
+                package,
+            } => match package.target {
+                Target::ToOutput(number) => {
+                    if number == 0 || number == 1 || number == 2 {
+                        Some(package.value)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .product::<usize>();
+
+    println!("{:?}", result);
 }
