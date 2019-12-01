@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{hash_map::DefaultHasher, BTreeMap};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader};
 use std::iter::{FromIterator, IntoIterator};
 
@@ -50,9 +51,24 @@ struct FactoryLayout {
     units: BTreeMap<Unit, usize>,
 }
 
+impl Hash for FactoryLayout {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.elevator.hash(state);
+        self.units.hash(state);
+    }
+}
+
 impl FactoryLayout {
     fn is_finished(&self) -> bool {
-        self.units.values().all(|u| u == &self.floors)
+        if self.units.values().all(|u| u == &(self.floors - 1)) {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn lowest_floor(&self) -> usize {
+        self.units.iter().map(|(_, v)| v).min().unwrap().clone()
     }
 
     fn possible_to_move(&self) -> Vec<MovementCombination> {
@@ -91,7 +107,10 @@ impl FactoryLayout {
                 }
             };
             self.elevator += 1;
-            self.into_iter().all(|u| u.iter().check())
+            self.into_iter()
+                .skip(self.elevator - 1)
+                .take(2)
+                .all(|u| u.iter().check())
         }
     }
 
@@ -109,7 +128,10 @@ impl FactoryLayout {
                 }
             };
             self.elevator -= 1;
-            self.into_iter().all(|u| u.iter().check())
+            self.into_iter()
+                .skip(self.elevator)
+                .take(2)
+                .all(|u| u.iter().check())
         }
     }
 }
@@ -254,67 +276,128 @@ impl FromIterator<String> for FactoryLayout {
 }
 
 #[inline]
-fn evaluate(factory_layout: &FactoryLayout, found_min: Option<usize>) -> Option<usize> {
+fn evaluate(
+    factory_layout: &FactoryLayout,
+    found_min: Option<usize>,
+    history: &mut HashStorage,
+) -> Option<usize> {
     let variants = factory_layout.possible_to_move();
     if variants.is_empty() || (found_min.is_some() && found_min == Some(0)) {
         None
-    } else {
+    } else if !history.contains_or_insert(&factory_layout) {
+        // println!("{:?}", factory_layout);
         let (pairs, singles): (Vec<MovementCombination>, Vec<MovementCombination>) =
             variants.into_iter().partition(|v| match v {
                 MovementCombination::Pair(_, _) => true,
                 MovementCombination::Single(_) => false,
             });
-        println!("{:?}", factory_layout);
         let mut new_min = found_min.clone();
+        // if (factory_layout.elevator - factory_layout.lowest_floor() > 1
+        //     && factory_layout.elevator != factory_layout.lowest_floor())
+        //     || factory_layout.elevator == factory_layout.lowest_floor()
+        // {
         for pair in &pairs {
             let mut f = factory_layout.clone();
             if f.move_up(pair.clone()) {
-                if f.is_finished() {
-                    new_min = Some(1);
+                match if f.is_finished() {
+                    Some(1)
                 } else {
-                    new_min = evaluate(&f, new_min.map(|m| m - 1))
-                        .map(|m| m + 1)
-                        .or_else(|| found_min.clone());
-                }
-            }
-        }
-        for single in &singles {
-            let mut f = factory_layout.clone();
-            if f.move_down(single.clone()) {
-                if f.is_finished() {
-                    new_min = Some(1);
-                } else {
-                    new_min = evaluate(&f, new_min.map(|m| m - 1))
-                        .map(|m| m + 1)
-                        .or_else(|| found_min.clone());
-                }
+                    evaluate(&f, new_min.map(|m| m - 1), history).map(|m| m + 1)
+                } {
+                    Some(x) => {
+                        if x < new_min.unwrap_or(std::usize::MAX) {
+                            new_min = Some(x);
+                            println!("R: {}\n{:?}", x, f);
+                        }
+                    }
+                    None => (),
+                };
             }
         }
         for single in &singles {
             let mut f = factory_layout.clone();
             if f.move_up(single.clone()) {
-                if f.is_finished() {
-                    new_min = Some(1);
+                match if f.is_finished() {
+                    Some(1)
                 } else {
-                    new_min = evaluate(&f, new_min.map(|m| m - 1))
-                        .map(|m| m + 1)
-                        .or_else(|| found_min.clone());
-                }
+                    evaluate(&f, new_min.map(|m| m - 1), history).map(|m| m + 1)
+                } {
+                    Some(x) => {
+                        if x < new_min.unwrap_or(std::usize::MAX) {
+                            new_min = Some(x);
+                            println!("R: {}\n{:?}", x, f);
+                        }
+                    }
+                    None => (),
+                };
             }
         }
-        for pair in &pairs {
-            let mut f = factory_layout.clone();
-            if f.move_down(pair.clone()) {
-                if f.is_finished() {
-                    new_min = Some(1);
-                } else {
-                    new_min = evaluate(&f, new_min.map(|m| m - 1))
-                        .map(|m| m + 1)
-                        .or_else(|| found_min.clone());
+        // } else {
+        if factory_layout.lowest_floor() != factory_layout.elevator {
+            for single in &singles {
+                let mut f = factory_layout.clone();
+                if f.move_down(single.clone()) {
+                    match if f.is_finished() {
+                        Some(1)
+                    } else {
+                        evaluate(&f, new_min.map(|m| m - 1), history).map(|m| m + 1)
+                    } {
+                        Some(x) => {
+                            if x < new_min.unwrap_or(std::usize::MAX) {
+                                new_min = Some(x);
+                                println!("R: {}\n{:?}", x, f);
+                            }
+                        }
+                        None => (),
+                    };
+                }
+            }
+            for pair in &pairs {
+                let mut f = factory_layout.clone();
+                if f.move_down(pair.clone()) {
+                    match if f.is_finished() {
+                        Some(1)
+                    } else {
+                        evaluate(&f, new_min.map(|m| m - 1), history).map(|m| m + 1)
+                    } {
+                        Some(x) => {
+                            if x < new_min.unwrap_or(std::usize::MAX) {
+                                new_min = Some(x);
+                                println!("R: {}\n{:?}", x, f);
+                            }
+                        }
+                        None => (),
+                    };
                 }
             }
         }
         new_min
+    } else {
+        None
+    }
+}
+
+struct HashStorage {
+    hashes: Vec<u64>,
+}
+
+impl HashStorage {
+    fn new() -> Self {
+        HashStorage { hashes: vec![] }
+    }
+
+    fn contains_or_insert(&mut self, factory: &FactoryLayout) -> bool {
+        let mut hasher = DefaultHasher::new();
+        factory.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        if self.hashes.contains(&hash) {
+            true
+        } else {
+            self.hashes.push(hash);
+            // println!("Size: {}", self.hashes.len());
+            false
+        }
     }
 }
 
@@ -327,7 +410,10 @@ pub fn run() {
         .filter_map(|l| l.ok())
         .collect::<FactoryLayout>();
 
-    let result = evaluate(&factory, Some(100));
+    let mut history = HashStorage::new();
+    let result = evaluate(&factory, Some(300), &mut history);
+
+    println!("{:?}", factory);
 
     println!("Result: {:?}", result);
 }
