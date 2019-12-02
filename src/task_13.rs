@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
 
@@ -62,51 +61,6 @@ impl Room {
         let sum = x * x + 3 * x + 2 * x * y + y + y * y + self.seed;
         let sum = format!("{:b}", sum).replace("0", "").len();
         sum % 2 == 1
-    }
-
-    fn print_radius(&self, radius: usize) -> RoomPrinter {
-        RoomPrinter::new(self, radius)
-    }
-}
-
-struct RoomPrinter<'a> {
-    room: &'a Room,
-    radius: usize,
-}
-
-impl<'a> RoomPrinter<'a> {
-    fn new(room: &'a Room, radius: usize) -> Self {
-        RoomPrinter { room, radius }
-    }
-}
-
-impl<'a> Debug for RoomPrinter<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut result = String::new();
-        for y in 0..self.radius {
-            if y == 0 {
-                result.push_str("  ");
-                for x in 0..self.radius {
-                    result.push_str(format!(" {:2}", x).as_str());
-                }
-                result.push('\n');
-            }
-            for x in 0..self.radius {
-                if x == 0 {
-                    result.push_str(format!("{:2}", y).as_str());
-                }
-                result.push(' ');
-                if self.room.wall_at(x, y) {
-                    result.push('#');
-                    result.push('#');
-                } else {
-                    result.push(' ');
-                    result.push(' ');
-                }
-            }
-            result.push('\n');
-        }
-        write!(f, "{}", result)
     }
 }
 
