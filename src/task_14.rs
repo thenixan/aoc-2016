@@ -6,16 +6,24 @@ use std::iter::Iterator;
 
 struct PasswordGenerator {
     salt: String,
+    times: usize,
 }
 
 impl PasswordGenerator {
     fn new(salt: String) -> Self {
-        PasswordGenerator { salt }
+        PasswordGenerator { salt, times: 0 }
+    }
+
+    fn new_iterative(salt: String, times: usize) -> Self {
+        PasswordGenerator { salt, times }
     }
 
     fn hash(&self, step: usize) -> String {
-        let digest = md5::compute(format!("{}{}", self.salt, step).as_bytes());
-        format!("{:x}", digest)
+        let mut input = format!("{}{}", self.salt, step);
+        for _ in 0..=self.times {
+            input = format!("{:x}", md5::compute(input.as_bytes()));
+        }
+        input
     }
 
     fn generator(&self) -> PasswordGeneratorIterator {
@@ -168,7 +176,11 @@ pub fn run() {
 }
 
 pub fn run_e() {
-    let mut input = File::open("input/task_13").unwrap();
+    let mut input = File::open("input/task_14").unwrap();
     let mut buffer = String::new();
     input.read_to_string(&mut buffer).unwrap();
+
+    let password = PasswordGenerator::new_iterative(buffer, 2016);
+    let result = password.generator().take(64).last().unwrap();
+    println!("Result: {}", result);
 }
