@@ -89,33 +89,22 @@ impl<'a> PasswordGeneratorIterator<'a> {
         self.waits.push(Triplet { c, pos: self.step });
     }
 
-    fn try_with_fives(&mut self, c: char) -> Option<usize> {
-        let min = self
+    fn try_with_fives(&mut self, c: char) -> Vec<usize> {
+        let triplets = self
             .waits
             .iter()
             .enumerate()
             .filter(|t| t.1.c == c)
-            .min_by(|l, r| l.1.pos.cmp(&r.1.pos))
             .map(|t| (t.0, t.1.pos))
-            .clone();
-        match min {
-            Some((pos, t)) => {
-                // self.waits.remove(pos);
-                Some(t)
-            }
-            _ => None,
+            .collect::<Vec<(usize, usize)>>();
+        for i in 0..triplets.len() {
+            self.waits.remove(triplets[i].0 - i);
         }
+        triplets.into_iter().map(|t| t.1).collect()
     }
 
     fn trigger(&self, step: usize) -> Option<Trigger> {
         let hash = self.password.hash(step);
-        let threes = hash.chars().slide(3).find_map(|c| {
-            if c[0] == c[1] && c[1] == c[2] {
-                Some(c[0])
-            } else {
-                None
-            }
-        });
         let fives = hash.chars().slide(5).find_map(|c| {
             if c[0] == c[1] && c[1] == c[2] && c[2] == c[3] && c[3] == c[4] {
                 Some(c[0])
@@ -123,9 +112,13 @@ impl<'a> PasswordGeneratorIterator<'a> {
                 None
             }
         });
-        if self.step == 22728 {
-            println!("DDD {:?} {:?}", threes, fives);
-        }
+        let threes = hash.chars().slide(3).find_map(|c| {
+            if c[0] == c[1] && c[1] == c[2] {
+                Some(c[0])
+            } else {
+                None
+            }
+        });
         match (threes, fives) {
             (Some(t), Some(f)) => Some(Trigger::Both(t, f)),
             (Some(t), None) => Some(Trigger::Triplet(t)),
@@ -150,21 +143,16 @@ impl<'a> Iterator for PasswordGeneratorIterator<'a> {
                 Some(Trigger::Five(f)) => self.try_with_fives(f),
                 Some(Trigger::Triplet(t)) => {
                     self.add_triplet(t);
-                    None
+                    vec![]
                 }
-                _ => None,
+                _ => vec![],
             };
-            if self.step == 22728 {
-                println!("DDD: {:?}", fives);
+            for f in fives {
+                self.results.push(f + 1000);
             }
-            match fives {
-                Some(position) => self.results.push(position + 1000),
-                _ => (),
-            };
             result = self.pop_result();
             self.step += 1;
         }
-        println!("Result: {:?}", result);
         result
     }
 }
@@ -175,8 +163,8 @@ pub fn run() {
     input.read_to_string(&mut buffer).unwrap();
 
     let password = PasswordGenerator::new(buffer);
-    let result = password.generator().take(64).last();
-    println!("Result: {:?}", result);
+    let result = password.generator().take(64).last().unwrap();
+    println!("Result: {}", result);
 }
 
 pub fn run_e() {
