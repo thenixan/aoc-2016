@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::Read;
 use std::ops::AddAssign;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
@@ -53,9 +53,17 @@ impl Data {
             } else {
                 self[i] = 0;
             }
-            self.remove(i + 1);
-            i += 1;
+            i += 2;
         }
+        let v: Vec<u8> = self
+            .0
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == 0)
+            .map(|(_, v)| v)
+            .collect();
+        self.0 = v;
     }
 
     fn invert(&mut self) {
@@ -107,6 +115,24 @@ pub fn run() {
 }
 
 pub fn run_e() {
-    let input = File::open("input/task_16").unwrap();
-    let _input = BufReader::new(input);
+    let mut input = File::open("input/task_16").unwrap();
+
+    let mut buffer = String::new();
+
+    input.read_to_string(&mut buffer).unwrap();
+
+    let mut data = buffer.parse::<Data>().unwrap();
+
+    let target_length = 35651584;
+    while data.len() < target_length {
+        data.increase();
+    }
+
+    data.truncate(target_length);
+
+    while data.len() % 2 == 0 {
+        data.checksum()
+    }
+
+    println!("Result: {}", data);
 }
