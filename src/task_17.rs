@@ -142,4 +142,46 @@ pub fn run() {
     }
 }
 
-pub fn run_e() {}
+pub fn run_e() {
+    let mut input = File::open("input/task_17").unwrap();
+    let mut password = String::new();
+
+    input.read_to_string(&mut password).unwrap();
+    let key = Key::new(password, 3, -3);
+
+    let mut steps = vec![Path::new()];
+
+    let mut i = 0;
+
+    let mut latest = 0;
+
+    loop {
+        if steps.is_empty() {
+            println!("Result: {}", latest);
+            break;
+        }
+        steps = steps
+            .into_iter()
+            .inspect(|step| {
+                if key.is_finished(&step) {
+                    latest = i;
+                }
+            })
+            .filter(|step| !key.is_finished(&step))
+            .collect();
+        steps = steps
+            .into_iter()
+            .flat_map(|path| {
+                let next_steps = key.next_steps(&path);
+                let mut result = vec![];
+                for step in next_steps {
+                    let mut p = path.clone();
+                    p.move_to(step);
+                    result.push(p);
+                }
+                result
+            })
+            .collect();
+        i += 1;
+    }
+}
