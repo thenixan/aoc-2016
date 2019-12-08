@@ -1,9 +1,25 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::iter::FromIterator;
 use std::str::FromStr;
 
 struct CommandSequence {
     data: Vec<Command>,
+}
+
+impl FromIterator<Command> for CommandSequence {
+    fn from_iter<I: IntoIterator<Item = Command>>(iter: I) -> Self {
+        CommandSequence {
+            data: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl CommandSequence {
+    fn apply(&self, s: &str) -> String {
+        let mut chars = s.chars().collect::<Vec<char>>();
+        chars.iter().collect()
+    }
 }
 
 enum Command {
@@ -48,6 +64,15 @@ impl FromStr for Command {
 pub fn run() {
     let input = File::open("input/task_21").unwrap();
     let input = BufReader::new(input);
+
+    let seq = input
+        .lines()
+        .filter_map(|l| l.ok())
+        .filter_map(|l| l.parse::<Command>().ok())
+        .collect::<CommandSequence>();
+
+    let result = seq.apply("abcdefgh");
+    println!("Result: {}", result);
 }
 
 pub fn run_e() {}
