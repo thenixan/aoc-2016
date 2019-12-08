@@ -23,6 +23,18 @@ impl CommandSequence {
         }
         chars.iter().collect()
     }
+    fn reverse(&self, s: &str) -> String {
+        let chars = s.chars().collect::<Vec<char>>();
+        self.data
+            .iter()
+            .rev()
+            .fold(chars, |mut acc, i| {
+                i.reverse(&mut acc);
+                acc
+            })
+            .iter()
+            .collect()
+    }
 }
 
 enum Command {
@@ -36,6 +48,30 @@ enum Command {
 }
 
 impl Command {
+    fn reverse(&self, c: &mut Vec<char>) {
+        match self {
+            Command::SwapPosition { .. } => self.apply(c),
+            Command::SwapLetter { .. } => self.apply(c),
+            Command::RotateLeft(s) => Command::RotateRight(*s).apply(c),
+            Command::RotateRight(s) => Command::RotateLeft(*s).apply(c),
+            Command::RotateWithPosition(s) => {
+                let mut pos = c
+                    .iter()
+                    .enumerate()
+                    .find_map(|i| if i.1 == s { Some(i.0) } else { None })
+                    .unwrap();
+                pos = pos / 2 + if pos % 2 == 1 || pos == 0 { 1 } else { 5 };
+                Command::RotateLeft(pos).apply(c);
+            }
+            Command::ReversePositions { .. } => self.apply(c),
+            Command::MoveToPosition { from, to } => Command::MoveToPosition {
+                from: *to,
+                to: *from,
+            }
+            .apply(c),
+        }
+    }
+
     fn apply(&self, c: &mut Vec<char>) {
         match self {
             Command::SwapPosition { left, right } => {
@@ -145,4 +181,16 @@ pub fn run() {
     println!("Result: {}", result);
 }
 
-pub fn run_e() {}
+pub fn run_e() {
+    let input = File::open("input/task_21").unwrap();
+    let input = BufReader::new(input);
+
+    let seq = input
+        .lines()
+        .filter_map(|l| l.ok())
+        .filter_map(|l| l.parse::<Command>().ok())
+        .collect::<CommandSequence>();
+
+    let result = seq.reverse("fbgdceah");
+    println!("Result: {}", result);
+}
