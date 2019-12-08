@@ -1,67 +1,77 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::ops::Add;
 use std::str::FromStr;
 
-struct IpAddressRange {
+#[derive(Debug)]
+struct IpRange {
     from: u32,
     to: u32,
 }
-
-impl IpAddressRange {
-    fn is_valid(&self, value: u32) -> bool {
-        value < self.from || self.to < value
+impl IpRange {
+    fn contains(&self, target: u32) -> bool {
+        self.from <= target && target <= self.to
     }
 }
 
-impl FromStr for IpAddressRange {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts = s
-            .split("-")
-            .filter_map(|l| l.parse::<u32>().ok())
-            .collect::<Vec<u32>>();
-        Ok(IpAddressRange {
-            from: parts[0],
-            to: parts[1],
-        })
+#[derive(Debug)]
+struct IpRangeFilter {
+    content: Vec<IpRange>,
+}
+
+impl IpRangeFilter {
+    fn not_contains(&self, other: u32) -> bool {
+        self.content.iter().all(|range| !range.contains(other))
     }
-}
 
-struct AddressFilter<'a, T: Iterator<Item = u32>> {
-    iter: T,
-    range: Vec<&'a IpAddressRange>,
-}
+    fn fold(&mut self) {
+        let len = self.content.len();
+        let mut i = 0;
+        while i < self.content.len() - 1 {
+            let mut j = i + 1;
+            while j < self.content.len() {
+                let left = &self.content[i];
+                let right = &self.content[j];
+                if left.contains(right.from) && !left.contains(right.to) {
+                    self.content[i].to = self.content[j].to;
+                    self.content.remove(j);
+                } else if right.contains(left.from) && !right.contains(left.to) {
+                    self.content[i].from = self.content[j].from;
+                    self.content.remove(j);
+                } else if !left.contains(right.from) && left.contains(right.to) {
+                    self.content[i].from = self.content[j].from;
+                    self.content.remove(j);
+                } else if !right.contains(left.from) && right.contains(left.to) {
+                    self.content[i].to = self.content[j].to;
+                    self.content.remove(j);
+                } else if left.contains(right.from) && left.contains(right.to) {
+                    self.content.remove(j);
+                } else if right.contains(left.from) && right.contains(left.to) {
+                    self.content[i].from = self.content[j].from;
+                    self.content[i].to = self.content[j].to;
+                    self.content.remove(j);
+                } else {
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+        if len != self.content.len() {
+            self.fold();
+        }
+    }
 
-impl<'a, T: Iterator<Item = u32>> Iterator for AddressFilter<'a, T> {
-    type Item = u32;
-
-    fn next(&mut self) -> Option<u32> {
-        while let Some(n) = self.iter.next() {
-            if self.is_valid(n) {
-                return Some(n);
+    fn append(&mut self, other: IpRange) {
+        let mut contains = false;
+        for i in 0..self.content.len() {
+            if self.content[i].contains(other.from) && self.content[i].contains(other.to) {
+                contains = true;
             }
         }
-        None
-    }
-}
-
-impl<'a, T: Iterator<Item = u32>> AddressFilter<'a, T> {
-    fn new(iter: T, range: Vec<&'a IpAddressRange>) -> Self {
-        AddressFilter { iter, range }
-    }
-
-    fn is_valid(&self, value: u32) -> bool {
-        self.range.iter().all(|r| r.is_valid(value))
-    }
-}
-
-pub trait AddressFilterIterator<T: Iterator<Item = u32>> {
-    fn filter_range(self, range: Vec<&IpAddressRange>) -> AddressFilter<T>;
-}
-
-impl<T: IntoIterator<Item = u32>> AddressFilterIterator<T::IntoIter> for T {
-    fn filter_range(self, range: Vec<&IpAddressRange>) -> AddressFilter<T::IntoIter> {
-        AddressFilter::new(self.into_iter(), range)
+        if !contains {
+            self.content.push(other);
+        }
+        self.fold();
     }
 }
 
@@ -69,20 +79,54 @@ pub fn run() {
     let input = File::open("input/task_20").unwrap();
     let input = BufReader::new(input);
 
-    let ranges = input
+    let filter = input
         .lines()
         .filter_map(|l| l.ok())
-        .filter_map(|l| l.parse::<IpAddressRange>().ok())
-        .collect::<Vec<IpAddressRange>>();
+        .map(|l| {
+            l.split("-")
+                .filter_map(|s| s.parse::<u32>().ok())
+                .collect::<Vec<u32>>()
+        })
+        .map(|l| IpRange {
+            from: l[0],
+            to: l[1],
+        })
+        .fold(IpRangeFilter { content: vec![] }, |mut acc, i| {
+            acc.append(i);
+            acc
+        });
 
-    let result = (0..=std::u32::MAX)
-        .find(|a| ranges.iter().all(|f| f.is_valid(*a)))
+    let result = (0..std::u32::MAX)
+        .find(|i| filter.not_contains(*i))
         .unwrap();
 
     println!("Result: {}", result);
 }
 
 pub fn run_e() {
-    let mut input = File::open("input/task_19").unwrap();
-    let mut buffer = String::new();
+    let input = File::open("input/task_20").unwrap();
+    let input = BufReader::new(input);
+
+    let filter = input
+        .lines()
+        .filter_map(|l| l.ok())
+        .map(|l| {
+            l.split("-")
+                .filter_map(|s| s.parse::<u32>().ok())
+                .collect::<Vec<u32>>()
+        })
+        .map(|l| IpRange {
+            from: l[0],
+            to: l[1],
+        })
+        .fold(IpRangeFilter { content: vec![] }, |mut acc, i| {
+            acc.append(i);
+            acc
+        });
+
+    let result = (0..std::u32::MAX)
+        .filter(|i| filter.not_contains(*i))
+        .count();
+
+    println!("Result: {}", result);
 }
