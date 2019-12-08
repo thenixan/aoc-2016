@@ -18,6 +18,9 @@ impl FromIterator<Command> for CommandSequence {
 impl CommandSequence {
     fn apply(&self, s: &str) -> String {
         let mut chars = s.chars().collect::<Vec<char>>();
+        for d in &self.data {
+            d.apply(&mut chars);
+        }
         chars.iter().collect()
     }
 }
@@ -30,6 +33,73 @@ enum Command {
     RotateWithPosition(char),
     ReversePositions { from: usize, to: usize },
     MoveToPosition { from: usize, to: usize },
+}
+
+impl Command {
+    fn apply(&self, c: &mut Vec<char>) {
+        match self {
+            Command::SwapPosition { left, right } => {
+                let b = c[*right];
+                c[*right] = c[*left];
+                c[*left] = b;
+            }
+            Command::SwapLetter { left, right } => {
+                for i in 0..c.len() {
+                    if c[i] == *left {
+                        c[i] = *right;
+                    } else if c[i] == *right {
+                        c[i] = *left;
+                    }
+                }
+            }
+            Command::RotateLeft(s) => {
+                let s = s % c.len();
+                for _ in 0..s {
+                    let a = c[0];
+                    c.remove(0);
+                    c.push(a);
+                }
+            }
+            Command::RotateRight(s) => {
+                let s = s % c.len();
+                for _ in 0..s {
+                    let a = c.pop().unwrap();
+                    c.insert(0, a);
+                }
+            }
+            Command::RotateWithPosition(t) => {
+                let mut pos = c
+                    .iter()
+                    .enumerate()
+                    .find_map(|i| if i.1 == t { Some(i.0) } else { None })
+                    .unwrap();
+                if pos >= 4 {
+                    pos += 1;
+                }
+                pos += 1;
+                let s = pos % c.len();
+                for _ in 0..s {
+                    let a = c.pop().unwrap();
+                    c.insert(0, a);
+                }
+            }
+            Command::ReversePositions { from, to } => {
+                let mut f = *from;
+                let mut t = *to;
+                while f <= t {
+                    let a = c[f];
+                    c[f] = c[t];
+                    c[t] = a;
+                    f += 1;
+                    t -= 1;
+                }
+            }
+            Command::MoveToPosition { from, to } => {
+                let a = c.remove(*from);
+                c.insert(*to, a);
+            }
+        }
+    }
 }
 
 impl FromStr for Command {
