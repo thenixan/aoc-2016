@@ -1,7 +1,5 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::ops::Add;
-use std::str::FromStr;
 
 #[derive(Debug)]
 struct IpRange {
