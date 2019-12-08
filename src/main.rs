@@ -13,6 +13,7 @@ mod task_18;
 mod task_19;
 mod task_2;
 mod task_20;
+mod task_21;
 mod task_3;
 mod task_4;
 mod task_5;
@@ -67,6 +68,8 @@ fn main() {
                 "19e" => task_19::run_e(),
                 "20" => task_20::run(),
                 "20e" => task_20::run_e(),
+                "21" => task_21::run(),
+                "21e" => task_21::run_e(),
                 _ => println!("Unresolved task"),
             };
         }
