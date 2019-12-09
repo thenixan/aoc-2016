@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader};
 mod objects {
     use regex::Regex;
     use std::collections::HashMap;
+    use std::fmt::{Display, Formatter};
     use std::iter::FromIterator;
 
     #[derive(Hash, Eq, PartialEq)]
@@ -25,6 +26,9 @@ mod objects {
     }
 
     impl NodeMeta {
+        pub fn new(used: usize, available: usize) -> Self {
+            NodeMeta { used, available }
+        }
         pub fn used(&self) -> usize {
             self.used
         }
@@ -45,6 +49,34 @@ mod objects {
         pub fn get(&self, x: usize, y: usize) -> &NodeMeta {
             &self.0[&NodePlacement::new(x, y)]
         }
+
+        pub fn empty(&self) -> (&NodePlacement, &NodeMeta) {
+            self.0
+                .iter()
+                .find_map(|(k, v)| if v.used == 0 { Some((k, v)) } else { None })
+                .unwrap()
+        }
+    }
+
+    impl Display for Nodes {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let (empty_pos, empty_meta) = self.empty();
+
+            let mut s = String::new();
+            for i in 0..self.height() {
+                for j in 0..self.width() {
+                    if self.get(j, i).used() == 0 {
+                        s.push(' ');
+                    } else if self.get(j, i).used() > empty_meta.available {
+                        s.push('#');
+                    } else {
+                        s.push('.');
+                    }
+                }
+                s.push('\n');
+            }
+            writeln!(f, "{}", s)
+        }
     }
 
     impl FromIterator<String> for Nodes {
@@ -61,10 +93,7 @@ mod objects {
                     let u = caps[4].parse::<usize>().unwrap();
                     let a = caps[5].parse::<usize>().unwrap();
                     let node_placement = NodePlacement::new(x, y);
-                    let node_meta = NodeMeta {
-                        used: u,
-                        available: a,
-                    };
+                    let node_meta = NodeMeta::new(u, a);
                     (node_placement, node_meta)
                 })
                 .collect();
@@ -93,7 +122,6 @@ pub fn run() {
             let y_i = i / width;
             let x_j = j % width;
             let y_j = j / width;
-            println!("{} - {}", x_i, y_i);
             if i != j
                 && nodes.get(x_i, y_i).used() != 0
                 && nodes.get(x_i, y_i).used() <= nodes.get(x_j, y_j).available()
@@ -106,4 +134,15 @@ pub fn run() {
     println!("Result: {}", result);
 }
 
-pub fn run_e() {}
+pub fn run_e() {
+    let input = File::open("input/task_22").unwrap();
+    let input = BufReader::new(input);
+
+    let nodes = input
+        .lines()
+        .skip(2)
+        .filter_map(|l| l.ok())
+        .collect::<Nodes>();
+
+    println!("{}", nodes);
+}
